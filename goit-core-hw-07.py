@@ -1,5 +1,6 @@
 from collections import UserDict
-from datetime import datetime,  timedelta
+import datetime as dt
+from datetime import datetime as dtdt
 
 class Field:
     def __init__(self, value):
@@ -26,7 +27,7 @@ class Phone(Field):
 class Birthday(Field):
     def __init__(self, value):
         try:
-            self.value = datetime.strptime(value, "%d.%m.%Y")   #перевірка формату дати та перетворення на об'єкт datetime 
+            self.value = dtdt.strptime(value, "%d.%m.%Y")   #перевірка формату дати та перетворення на об'єкт datetime 
         except ValueError:
             raise ValueError("Invalid date format. Use DD.MM.YYYY")
    
@@ -91,21 +92,21 @@ def input_error(func):
 
     return inner
 
-def parse_input(user_input):
+def parse_input(user_input):         #функція розбивання введеного рядка на слова (використовує пробіл як розділювач )
     cmd, *args = user_input.split()
     cmd = cmd.strip().lower()
     return cmd, *args
 
 @input_error
 def add_contact(args, book):
+    if len(args) != 2:
+        return "Invalid command. Usage: add [name] [phone]"
+    
     name, phone = args
-    if name not in book.data:
-        record = Record(name)
-        record.add_phone(phone)
-        book.add_record(record)
-        return "Contact added."
-    else:
-        return "Contact already exists."
+    record = Record(name)
+    record.add_phone(phone)
+    book.add_record(record)
+    return "Contact added."
 
 @input_error
 def change_contact(args, book):
@@ -123,11 +124,13 @@ def show_phone(args, book):
     return book[name] if name in book.keys() else "No such user"
 
 @input_error
-def show_all(args, book):
-    s=''
-    for key in book:
-        s+=(f"{key:10} : {book[key]:10}\n")
-    return s  
+def show_all(book):
+    if not book.data:
+        return "No contacts found."
+    
+    for name, record in book.data.items():
+        print(f"{name}: {'; '.join(str(phone) for phone in record.phones)}")
+    return "" 
 
 @input_error
 def add_birthday(args, book):
@@ -150,24 +153,26 @@ def show_birthday(args, book):
 
 @input_error
 def birthdays(book):
-    upcoming_birthdays = []
-    current_day = datetime.now().date()
-    next_week = current_day + timedelta(days=7)
-
-    for record in book.data.values():
-        if record.birthday:
-            birthday_datetime = record.birthday.as_datetime().date()
-            birthday_this_year = datetime(current_day.year, birthday_datetime.month, birthday_datetime.day).date()
-
-            if birthday_this_year < current_day:
-                birthday_this_year = datetime(current_day.year + 1, birthday_datetime.month, birthday_datetime.day).date()
-
-            days_till_birthday = (birthday_this_year - current_day).days
-
-            if 0 <= days_till_birthday <= 7:
-                upcoming_birthdays.append({"name": record.name.value, "birthday": birthday_this_year.strftime("%d.%m.%Y")})
-
-    return upcoming_birthdays
+    tdate=dtdt.today().date() # беремо сьогоднішню дату
+    birthdays=[] # створюємо список для результатів
+    for user in book: # перебираємо користувачів
+        bdate=user["birthday"].replace("-","") # отримуємо дату народження людини у вигляді числового  рядка
+        bdate=str(tdate.year)+bdate[4:] # Замінюємо рік на поточний
+        bdate=dtdt.strptime(bdate, "%Y.%m.%d").date() # перетворюємо дату народження в об’єкт date
+        week_day=bdate.isoweekday() # Отримуємо день тижня (1-7)
+        days_between=(bdate-tdate).days # рахуємо різницю між зараз і днем народження цьогоріч у днях
+        if 0<=days_between<7: # якщо день народження протягом 7 днів від сьогодні
+            if week_day<6: #  якщо пн-пт
+                birthdays.append({'name':user[book], 'birthday':bdate.strftime("%Y.%m.%d")}) 
+                # Додаємо запис у список.
+            else:
+                if (bdate+dt.timedelta(days=1)).weekday()==0:# якщо неділя
+                    birthdays.append({'name':user[book], 'birthday':(bdate+dt.timedelta(days=1)).strftime("%Y.%m.%d")})
+                    #Переносимо на понеділок. Додаємо запис у список.
+                elif (bdate+dt.timedelta(days=2)).weekday()==0: #якщо субота
+                    birthdays.append({'name':user[book], 'birthday':(bdate+dt.timedelta(days=2)).strftime("%Y.%m.%d")})
+                    #Переносимо на понеділок. Додаємо запис у список.
+    return birthdays
 
 def main():
     book = AddressBook()
